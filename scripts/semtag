@@ -6,12 +6,12 @@
 PROG=semtag
 PROG_VERSION="v0.1.0"
 
-SEMVER_REGEX="^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(\-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$"
+SEMVER_REGEX="^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(\-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$"
 IDENTIFIER_REGEX="^\-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*$"
 NUMERIC_REGEX='^[0-9]+$'
 
 # Global variables
-FIRST_VERSION="v0.0.0"
+FIRST_VERSION="0.0.0"
 finalversion=$FIRST_VERSION
 lastversion=$FIRST_VERSION
 hasversiontag="false"
@@ -421,7 +421,8 @@ function bump_version {
       __resultversion=$__candidatefromlast
       ;;
     -1)
-      __resultversion="$__candidatefromfinal"
+      echo "Version must be a valid semver and can't be lower than final version: $__candidatefromlast"
+      exit 1
       ;;
     1)
       __resultversion=$__candidatefromlast
