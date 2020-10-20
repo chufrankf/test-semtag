@@ -2,7 +2,7 @@
 
 # From semver.org, convert PCRE regex to bash extended expressions
 # https://unix.stackexchange.com/questions/421460/bash-regex-and-https-regex101-com
-SEMVER_CAPTURE_GROUP="^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(\-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$"
+SEMVER_CAPTURE_GROUP="^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\-?([0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?\+?([0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$"
 
 HELP="\
 Usage:
@@ -63,6 +63,30 @@ function explode_version {
   return 0
 }
 
+# Checks to see that the current semantic version is after the previous semantic versions
+# $1 the semver (current)
+# $2 the older semver (previous)
+function compare {
+  local current_semver=$1
+  local previous_semver=$2
+  # Compares MAJOR, MINOR and PATCH in order
+  # If the number in the current version is lower than the previous, then there is a version failure
+  # If the number is larger when comparing in that order, then the version must be larger
+  for i in 0 1 2; do
+    case $((${current_semver[$i]} - ${previous_semver[$i]})) in
+      0)
+        ;;
+      -[0-9]*)
+        echo "ERROR: $1 is older than previous tag ($previous_tag)"
+        return 1
+        ;;
+      [0-9]*)
+        break
+        ;;
+    esac
+  done
+}
+
 # Validates the desired version/tag and ensure that it is semver compatible.
 # Also validates that version against the previous version to ensure that it comes after
 # $1 The string containing the version in semantic format
@@ -76,27 +100,14 @@ function validate {
   fi
 
   local previous_tag="$(git tag --sort -version:refname | sed -n $2p)"
-  explode_version $previous_tag previous_semver
-  if [ -n "$previous_semver" ] ; then
-    # Compares MAJOR, MINOR and PATCH in order
-    # If the number in the current version is lower than the previous, then there is a version failure
-    # If the number is larger when comparing in that order, then the version must be larger
-    for i in 0 1 2; do
-      case $((${current_semver[$i]} - ${previous_semver[$i]})) in
-        0)
-          ;;
-        -[0-9]*)
-          echo "ERROR: $1 is older than previous tag ($previous_tag)"
-          return 1
-          ;;
-        [0-9]*)
-          break
-          ;;
-      esac
-    done
-  else
-    echo "ERROR: Previous tag ($previous_tag) does not meet semantic versioning patterns. Unable to compare. Failing validation"
-    return 1
+  if [ -n "$previous_tag" ]; then
+    explode_version $previous_tag previous_semver
+    if [[ -z "$previous_semver" ]] ; then
+      if compare $current_semver $previous_semver; then
+        echo "ERROR: Previous tag ($previous_tag) does not meet semantic versioning patterns. Unable to compare. Failing validation"
+        return 1
+      fi
+    fi
   fi
 }
 
@@ -107,18 +118,22 @@ function get {
   local result=$1
   local latest_tag="$(git describe --tags --abbrev=0)"
   if validate $latest_tag 2; then
+  
       explode_version $latest_tag latest_semver
       local branch="$(git rev-parse --abbrev-ref HEAD)"
       local changes_count="$(git rev-list ${latest_tag}.. --count)"
       local commit_hash="$(git rev-parse --short HEAD)"
-
+      local major="${latest_semver[0]}"
+      local minor="${latest_semver[1]}"
+      local patch="${latest_semver[2]}"
       local prerelease="${latest_semver[3]}"
       local metadata="${latest_semver[4]}"
+
       if [ "$changes_count" -ge "1" ]; then
         prerelease="${prerelease:-"dev"}.$changes_count"
       fi
 
-      eval "$result=\"$latest_tag${prerelease:+"-$prerelease"}+${metadata:+"$metadata."}${branch}.${commit_hash}\""
+      eval "$result=\"$major.$minor.$patch${prerelease:+"-$prerelease"}+${metadata:+"$metadata."}${branch}.${commit_hash}\""
   else 
     echo "ERROR: Validation failed"
     exit 1
