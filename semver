@@ -81,11 +81,10 @@ function get {
   local metadata="${semver[4]}"
 
   if [ "$changes_count" -ge "1" ]; then
-    prerelease="${prerelease:-"dev"}.$changes_count"
+    prerelease="${prerelease:+"$prerelease."}dev.$changes_count"
   fi
 
   eval "$result=\"$major.$minor.$patch${prerelease:+"-$prerelease"}+${metadata:+"$metadata."}${branch}.${commit_hash}\""
-
 }
 
 case $ACTION in
