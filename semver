@@ -9,8 +9,6 @@ Usage:
   $PROG
   $PROG get
   $PROG --help (-h)
-Options:
-  -v         Specifies manually the version to be used, must be a valid semantic version.
 Commands:
   get        Returns the current version, based on the latest one, if there are uncommited or
                unstaged changes, they will be reflected in the version, adding the number of
@@ -22,11 +20,8 @@ ACTION="$1"
 shift
 
 # We get the parameters
-while getopts "v:h" opt; do
+while getopts "h" opt; do
   case $opt in
-    v)
-      forcedversion="$OPTARG"
-      ;;
     h)
       echo -e "$HELP"
       ;;
@@ -63,81 +58,34 @@ function explode_version {
   return 0
 }
 
-# Checks to see that the current semantic version is after the previous semantic versions
-# $1 the semver (current)
-# $2 the older semver (previous)
-function compare {
-  local current_semver=$1
-  local previous_semver=$2
-  # Compares MAJOR, MINOR and PATCH in order
-  # If the number in the current version is lower than the previous, then there is a version failure
-  # If the number is larger when comparing in that order, then the version must be larger
-  for i in 0 1 2; do
-    case $((${current_semver[$i]} - ${previous_semver[$i]})) in
-      0)
-        ;;
-      -[0-9]*)
-        echo "ERROR: $1 is older than previous tag ($previous_tag)"
-        return 1
-        ;;
-      [0-9]*)
-        break
-        ;;
-    esac
-  done
-}
-
-# Validates the desired version/tag and ensure that it is semver compatible.
-# Also validates that version against the previous version to ensure that it comes after
-# $1 The string containing the version in semantic format
-# $2 The number of the tag to compare to (ie. 1 is most recent, 2 is second most recent)
-# return boolean whether or not it successfully validated
-function validate {
-  explode_version $1 current_semver
-  if [[ -z "$current_semver" ]] ; then
-    echo "ERROR: $1 does not meet semantic versioning patterns"
-    return 1
-  fi
-
-  local previous_tag="$(git tag --sort -version:refname | sed -n $2p)"
-  if [ -n "$previous_tag" ]; then
-    explode_version $previous_tag previous_semver
-    if [[ -z "$previous_semver" ]] ; then
-      if compare $current_semver $previous_semver; then
-        echo "ERROR: Previous tag ($previous_tag) does not meet semantic versioning patterns. Unable to compare. Failing validation"
-        return 1
-      fi
-    fi
-  fi
-}
-
 # Gets the current semantic version from git describe
 # <tag.major>.<tag.minor>.<tag.patch>-<tag.prerelease|dev>[.<changes>]+[<tag.metadata>.]<branch>.<commit_hash>
 # $1 the variable to store the resulting version
 function get {
   local result=$1
-  local latest_tag="$(git describe --tags --abbrev=0)"
-  if validate $latest_tag 2; then
-  
-      explode_version $latest_tag latest_semver
-      local branch="$(git rev-parse --abbrev-ref HEAD)"
-      local changes_count="$(git rev-list ${latest_tag}.. --count)"
-      local commit_hash="$(git rev-parse --short HEAD)"
-      local major="${latest_semver[0]}"
-      local minor="${latest_semver[1]}"
-      local patch="${latest_semver[2]}"
-      local prerelease="${latest_semver[3]}"
-      local metadata="${latest_semver[4]}"
+  local tag="$(git describe --tags --abbrev=0)"
 
-      if [ "$changes_count" -ge "1" ]; then
-        prerelease="${prerelease:-"dev"}.$changes_count"
-      fi
-
-      eval "$result=\"$major.$minor.$patch${prerelease:+"-$prerelease"}+${metadata:+"$metadata."}${branch}.${commit_hash}\""
-  else 
-    echo "ERROR: Validation failed"
+  explode_version $tag semver
+  if [[ -z "$semver" ]] ; then
+    echo "ERROR: $1 does not meet semantic versioning patterns"
     exit 1
   fi
+
+  local branch="$(git rev-parse --abbrev-ref HEAD)"
+  local changes_count="$(git rev-list ${tag}.. --count)"
+  local commit_hash="$(git rev-parse --short HEAD)"
+  local major="${semver[0]}"
+  local minor="${semver[1]}"
+  local patch="${semver[2]}"
+  local prerelease="${semver[3]}"
+  local metadata="${semver[4]}"
+
+  if [ "$changes_count" -ge "1" ]; then
+    prerelease="${prerelease:-"dev"}.$changes_count"
+  fi
+
+  eval "$result=\"$major.$minor.$patch${prerelease:+"-$prerelease"}+${metadata:+"$metadata."}${branch}.${commit_hash}\""
+
 }
 
 case $ACTION in
@@ -147,14 +95,6 @@ case $ACTION in
   get)
     get current
     echo "$current"
-    ;;
-  validate)
-    if validate $forcedversion "1"; then
-      echo "SUCCESS: $forcedversion is a valid semantic version"
-    else 
-      echo "ERROR: $forcedversion is not a semantic version. Please see semver.org for requirements"
-      exit 1
-    fi
     ;;
   *)
     echo "'$ACTION' is not a valid command, see --help for available commands."
