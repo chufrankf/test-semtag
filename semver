@@ -67,7 +67,6 @@ function get {
   local tag="$(git describe --tags --abbrev=0)"
 
   explode_version $tag semver
-  echo "Parsed semantic version: [${semver[*]}]"
   if [[ -z "$semver" ]] ; then
     echo "ERROR: $1 does not meet semantic versioning patterns"
     exit 1
